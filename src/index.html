@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SmartGarden - Monitoramento</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f8f5;
+      text-align: center;
+      padding: 40px;
+    }
+
+    h1 {
+      color: #2e7d32;
+    }
+
+    .sensor-data, .clima, .chuva, .alerta-chuva {
+      margin-top: 20px;
+      font-size: 20px;
+      color: #333;
+    }
+
+    .barra-umidade {
+      width: 80%;
+      max-width: 400px;
+      height: 25px;
+      background-color: #ddd;
+      border-radius: 15px;
+      margin: 10px auto;
+      overflow: hidden;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+    }
+
+    .barra-preenchida {
+      height: 100%;
+      width: 0%;
+      transition: width 0.5s ease-in-out;
+      border-radius: 15px;
+    }
+
+    .status-solo {
+      font-size: 18px;
+      margin-top: 5px;
+      font-weight: bold;
+    }
+
+    .loading {
+      color: #666;
+      font-style: italic;
+      margin-top: 20px;
+    }
+
+    .chuva p, .alerta-chuva p {
+      margin: 5px 0;
+    }
+
+    .alerta-chuva {
+      margin-top: 30px;
+      padding: 20px;
+      border-radius: 10px;
+      background-color: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeeba;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🌱 SmartGarden - Monitoramento</h1>
+
+  <!-- Dados do ESP32 -->
+  <div class="sensor-data">
+    <p><strong>Temperatura:</strong> <span id="temperatura">--</span> °C</p>
+    <p><strong>Umidade do Ar (ESP32):</strong> <span id="umidade_ar">--</span> %</p>
+    <p><strong>Umidade do Solo:</strong> <span id="umidade_solo">--</span> %</p>
+  </div>
+
+  <!-- Barra de umidade do solo -->
+  <div class="barra-umidade">
+    <div class="barra-preenchida" id="barra-umidade-solo"></div>
+  </div>
+  <div class="status-solo" id="status_solo">Aguardando dados...</div>
+
+  <!-- Clima atual -->
+  <div class="clima">
+    <h2>🌤️ Clima na sua cidade</h2>
+    <p><strong>Cidade:</strong> <span id="clima-cidade">--</span></p>
+    <p><strong>Temperatura:</strong> <span id="clima-temp">--</span> °C</p>
+    <p><strong>Umidade do Ar (Clima):</strong> <span id="clima-umidade">--</span> %</p>
+    <p><strong>Comparação:</strong> <span id="clima-comparacao">--</span></p>
+  </div>
+
+  <!-- Previsão de chuva -->
+  <div class="chuva">
+    <h2>🌧️ Previsão de Chuva (Próximas 6 horas)</h2>
+    <p><strong>Total:</strong> <span id="chuva-6h">--</span> mm</p>
+  </div>
+
+  <!-- Alerta de chuva -->
+  <div class="alerta-chuva">
+    <h2>⚠️ Alerta de Chuva</h2>
+    <p id="alerta-mensagem">Carregando dados...</p>
+  </div>
+
+  <p class="loading" id="status">Carregando dados...</p>
+
+  <script>
+    const ipESP32 = "http://192.168.1.155"; // IP do ESP32
+    const apiKey = "2b5855631a29821cd5ab48fb1244df10";      // Sua chave da OpenWeatherMap
+    const cidade = "Curitiba";              // Nome da cidade
+    const latitude = -25.4533;              // Latitude (Curitiba)
+    const longitude = -49.2011;             // Longitude (Curitiba)
+
+    function atualizarDados() {
+      // Dados do ESP32
+      fetch(`${ipESP32}/api/sensor`)
+        .then(response => {
+          if (!response.ok) throw new Error("Erro no ESP32");
+          return response.json();
+        })
+        .then(data => {
+          document.getElementById("temperatura").textContent = data.temperatura.toFixed(1);
+          document.getElementById("umidade_ar").textContent = data.umidade_ar.toFixed(1);
+          document.getElementById("umidade_solo").textContent = data.umidade_solo.toFixed(1);
+
+          // Atualiza barra de umidade do solo
+          const barra = document.getElementById("barra-umidade-solo");
+          const status = document.getElementById("status_solo");
+          const umidadeSolo = data.umidade_solo;
+
+          barra.style.width = `${umidadeSolo}%`;
+
+          if (umidadeSolo < 30) {
+            barra.style.backgroundColor = "#e53935";
+            status.textContent = "⚠️ Solo seco";
+            status.style.color = "#c62828";
+          } else if (umidadeSolo < 70) {
+            barra.style.backgroundColor = "#43a047";
+            status.textContent = "✅ Umidade ideal";
+            status.style.color = "#2e7d32";
+          } else {
+            barra.style.backgroundColor = "#1e88e5";
+            status.textContent = "💧 Solo muito úmido";
+            status.style.color = "#1565c0";
+          }
+        })
+        .catch(err => {
+          console.error("Falha no ESP32:", err.message);
+        });
+
+      // Dados do clima (OpenWeatherMap)
+      const urlClima = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric&lang=pt_br`;
+
+      fetch(urlClima)
+        .then(response => {
+          if (!response.ok) throw new Error("Erro na API do clima");
+          return response.json();
+        })
+        .then(json => {
+          const temp = json.main.temp;
+          const umidade = json.main.humidity;
+          const nomeCidade = json.name;
+
+          document.getElementById("clima-cidade").textContent = nomeCidade;
+          document.getElementById("clima-temp").textContent = temp.toFixed(1);
+          document.getElementById("clima-umidade").textContent = umidade.toFixed(1);
+
+          const umidadeESP32 = parseFloat(document.getElementById("umidade_ar").textContent);
+          let comparacao = "";
+
+          if (Math.abs(umidadeESP32 - umidade) < 5) {
+            comparacao = "✅ Próximo ao clima real";
+          } else if (umidadeESP32 < umidade) {
+            comparacao = "⚠️ Sensor mais seco que o ambiente";
+          } else {
+            comparacao = "⚠️ Sensor mais úmido que o ambiente";
+          }
+
+          document.getElementById("clima-comparacao").textContent = comparacao;
+        });
+
+      // Previsão de chuva (Open-Meteo)
+      const urlChuva = ` https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=precipitation&forecast_days=1`;
+
+      fetch(urlChuva)
+        .then(response => response.json())
+        .then(json => {
+          const chuva = json.hourly.precipitation;
+          const agora = new Date().getHours();
+          const prox6h = chuva.slice(agora, agora + 6).reduce((a, b) => a + b, 0).toFixed(1);
+
+          document.getElementById("chuva-6h").textContent = prox6h + " mm";
+
+          const valorChuva = parseFloat(prox6h);
+          const alerta = document.getElementById("alerta-mensagem");
+
+          if (valorChuva === 0) {
+            alerta.textContent = "🌤️ Sem previsão de chuva nas próximas 6 horas.";
+            alerta.style.color = "green";
+          } else if (valorChuva > 0 && valorChuva <= 2.5) {
+            alerta.textContent = "🌦️ Chuva leve prevista. Pode molhar levemente.";
+            alerta.style.color = "orange";
+          } else if (valorChuva <= 7.5) {
+            alerta.textContent = "🌧️ Chuva moderada. Considere levar guarda-chuva.";
+            alerta.style.color = "darkorange";
+          } else if (valorChuva <= 15) {
+            alerta.textContent = "⛈️ Chuva forte! Evite sair se possível.";
+            alerta.style.color = "red";
+          } else {
+            alerta.textContent = "🌊 Chuva muito forte! Risco de alagamentos!";
+            alerta.style.color = "darkred";
+            alerta.style.fontWeight = "bold";
+          }
+        })
+        .catch(err => {
+          console.error("Erro na previsão de chuva:", err);
+          document.getElementById("alerta-mensagem").textContent = "⚠️ Erro ao carregar previsão de chuva.";
+        });
+
+      document.getElementById("status").textContent = "Dados atualizados.";
+    }
+
+    // Primeira atualização
+    atualizarDados();
+
+    // Atualiza a cada 5 minutos
+    setInterval(atualizarDados, 300000);
+  </script>
+
+</body>
+</html>
