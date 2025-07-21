@@ -164,7 +164,8 @@ const char htmlPage[] PROGMEM = R"rawliteral(
   <p class="loading" id="status">Carregando dados...</p>
 
   <script>
-    const ipESP32 = "http://192.168.1.155:8080"; // IP do ESP32
+    // const ipESP32 = "http://192.168.1.155:8080"; // ❌ IP local fixo do ESP32
+    const ipESP32 = window.location.origin; // ✅ Usa o mesmo domínio da página
     const apiKey = "2b5855631a29821cd5ab48fb1244df10"; // Sua chave da OpenWeatherMap
     const cidade = "Curitiba"; // Nome da cidade
     const latitude = -25.4533; // Latitude (Curitiba)
